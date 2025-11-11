@@ -6,6 +6,7 @@
         :style="mentionButtonStyle"
         :disabled="isUiDisabled"
         @click="handleClick"
+        @mousedown.prevent
         aria-label="Add mention"
     >
         <span

@@ -71,7 +71,7 @@
             :mention-record-text-color="mentionRecordTextColor"
             :mention-record-font-size="mentionRecordFontSize"
             @select-record="handleRecordSelect"
-            @close="closeMentionDropdown"
+            @close="() => closeMentionDropdown(true)"
             @tab-change="handleTabChange"
             @update:highlighted-index="val => highlightedRecordIndex = val"
         />
@@ -497,9 +497,15 @@ export default {
         const sendMessage = () => {
             if (isEditing.value || !canSend.value || props.isDisabled) return;
 
+            // Validate mentions - only include mentions that still exist in the message
+            const validMentions = pendingMentions.value.filter(mention => {
+                const mentionText = `@${mention.recordLabel}`;
+                return inputValue.value.includes(mentionText);
+            });
+
             // Include mentions in send event
             emit('send', {
-                mentions: pendingMentions.value.length > 0 ? [...pendingMentions.value] : undefined,
+                mentions: validMentions.length > 0 ? [...validMentions] : undefined,
             });
 
             inputValue.value = '';
@@ -598,8 +604,32 @@ export default {
             emit('mention-dropdown-opened');
         };
 
-        const closeMentionDropdown = () => {
+        const closeMentionDropdown = (removeOrphanedAt = false) => {
             if (!mentionDropdownVisible.value) return;
+
+            // Remove orphaned @ symbol if requested (e.g., when closing without selection)
+            if (removeOrphanedAt && mentionStartPosition.value >= 0) {
+                const input = textareaRef.value;
+                const value = inputValue.value;
+                const atPos = mentionStartPosition.value;
+                
+                // Check if there's still an @ at the mention start position
+                if (value[atPos] === '@') {
+                    // Get the current cursor position
+                    const cursorPos = input ? input.selectionStart : atPos + 1;
+                    
+                    // Remove from @ position to current cursor (the incomplete mention)
+                    const newValue = value.substring(0, atPos) + value.substring(cursorPos);
+                    inputValue.value = newValue;
+                    
+                    // Adjust cursor position
+                    nextTick(() => {
+                        if (input) {
+                            input.selectionStart = input.selectionEnd = atPos;
+                        }
+                    });
+                }
+            }
 
             mentionDropdownVisible.value = false;
             mentionFilterText.value = '';
@@ -622,6 +652,12 @@ export default {
             const input = textareaRef.value;
             if (!input) return;
 
+            // If dropdown is already open, close it and remove the orphaned @
+            if (mentionDropdownVisible.value) {
+                closeMentionDropdown(true);
+                return;
+            }
+
             const cursorPos = input.selectionStart;
             const value = input.value;
 
@@ -631,10 +667,12 @@ export default {
                 inputValue.value = newValue;
 
                 nextTick(() => {
+                    input.focus(); // Ensure focus stays on textarea
                     input.selectionStart = input.selectionEnd = cursorPos + 1;
                     openMentionDropdown(cursorPos);
                 });
             } else {
+                input.focus(); // Ensure focus stays on textarea
                 openMentionDropdown(cursorPos - 1);
             }
         };
@@ -734,7 +772,7 @@ export default {
                 case 'Escape':
                     event.preventDefault();
                     event.stopPropagation();
-                    closeMentionDropdown();
+                    closeMentionDropdown(true); // Remove orphaned @ when user presses Escape
                     break;
                 case 'Tab':
                     // Cycle through tabs

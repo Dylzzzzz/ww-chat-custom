@@ -210,7 +210,11 @@ export default {
 
         const handleClickOutside = (event) => {
             if (dropdownRef.value && !dropdownRef.value.contains(event.target)) {
-                emit('close');
+                // Check if click is on mention button (it has its own handler)
+                const isMentionButton = event.target.closest('.ww-chat-input-area__mention-btn');
+                if (!isMentionButton) {
+                    emit('close');
+                }
             }
         };
 
@@ -247,11 +251,12 @@ export default {
         );
 
         onMounted(() => {
-            document.addEventListener('click', handleClickOutside);
+            // Use mousedown instead of click to catch the event before any blur handlers
+            document.addEventListener('mousedown', handleClickOutside);
         });
 
         onBeforeUnmount(() => {
-            document.removeEventListener('click', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside);
         });
 
         return {
